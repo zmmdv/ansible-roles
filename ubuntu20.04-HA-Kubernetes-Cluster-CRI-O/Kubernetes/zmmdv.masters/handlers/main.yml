@@ -1,0 +1,19 @@
+---
+# handlers file for master
+- name: start kubelet
+  systemd:
+    daemon_reload: yes
+    name: kubelet
+    state: started
+
+- name: stop kubelet
+  systemd:
+    daemon_reload: yes
+    name: kubelet
+    state: stopped
+
+- name: restart kubelet
+  systemd:
+    daemon_reload: yes
+    name: kubelet
+    state: restarted

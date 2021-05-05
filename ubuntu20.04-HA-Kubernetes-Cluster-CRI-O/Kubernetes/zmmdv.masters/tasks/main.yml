@@ -1,0 +1,62 @@
+---
+# tasks file for kubernetes/master
+
+- name: Allow all access to Kubernetes needed ports
+  ufw:
+    rule: allow
+    port: "{{ item }}"
+    proto: tcp
+  with_items:
+  - '6443'
+  - '10251'
+  - '10252'
+  - '10248'
+  - '10249'
+  - '10250'
+
+- name: Replace a localhost entry with our own
+  ansible.builtin.lineinfile:
+    path: /etc/systemd/system/kubelet.service.d/0-crio.conf
+    regexp: 'KUBELET_EXTRA_ARGS='
+    line: KUBELET_EXTRA_ARGS=--container-runtime=remote --cgroup-driver=cgroupfs --container-runtime-endpoint='unix:///var/run/crio/crio.sock' --runtime-request-timeout=5m
+    create: yes
+
+- name: copy etcd-ca and apiserver-etcd-client certs
+  copy:
+    src: "{{ kubernetes_project_dir }}/etcd/pki/{{ item.src }}"
+    dest: /etc/kubernetes/{{ item.dest }}
+    mode: "{{ item.mode }}"
+  with_items:
+  - src: etcd/ca.crt
+    dest: pki/etcd/
+    mode: '0640'
+  - src: apiserver-etcd-client.crt
+    dest: pki/
+    mode: '0640'
+  - src: apiserver-etcd-client.key
+    dest: pki/
+    mode: '0600'
+
+
+- name: create esdar directory
+  file:
+    path: /etc/kubernetes/esdar
+    state: directory
+    mode: 0400
+  when: kubernetes_esdar_key | length
+
+- name: copy encryption config
+  template:
+    src: etc_kubernetes_esdar_secrets_encryption.yml.j2
+    dest: /etc/kubernetes/esdar/secrets_encryption.yml
+    mode: 0400
+  when: kubernetes_esdar_key | length
+  notify:
+  - restart kubelet
+
+- import_tasks: master_init.yml
+  when: inventory_hostname in ansible_play_batch[0]
+
+- import_tasks: master_join.yml
+  when: inventory_hostname not in ansible_play_batch[0]
+

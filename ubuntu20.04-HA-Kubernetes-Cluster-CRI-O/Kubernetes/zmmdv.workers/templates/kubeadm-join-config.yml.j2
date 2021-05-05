@@ -1,0 +1,7 @@
+apiVersion: kubeadm.k8s.io/v1beta2
+kind: JoinConfiguration
+discovery:
+  bootstrapToken:
+    apiServerEndpoint: {{ kubernetes_apiserver_host }}:{{ kubernetes_apiserver_port }}
+    token: {{ kubernetes_bootstrap_token }}
+    unsafeSkipCAVerification: true

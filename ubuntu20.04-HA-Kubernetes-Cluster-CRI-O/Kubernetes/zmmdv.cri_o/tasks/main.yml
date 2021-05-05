@@ -1,0 +1,50 @@
+- name: Get Cri-o apt-key
+  apt_key: 
+    url: https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/{{os_version}}/Release.key
+    state: present
+
+- name: Get Cri-o apt-key
+  apt_key: 
+    url: https://download.opensuse.org/repositories/devel:kubic:libcontainers:stable:cri-o:{{cri_version}}/{{os_version}}/Release.key
+    state: present
+
+- name: Add Cri-o stable repo
+  apt_repository:
+    repo: deb https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable:/cri-o:/{{cri_version}}/{{os_version}}// /
+    state: present
+    filename: cri-o-{{cri_version}}
+
+- name: Add Cri-o stable repo
+  apt_repository:
+    repo: deb https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/{{os_version}}/ /
+    state: present
+    filename: cri-o-stable
+
+
+- name: Upgrade all packages to the latest version
+  apt:
+    update_cache: yes
+
+- name: Install cri-o
+  apt:
+    name:
+    - cri-o
+    - cri-o-runc
+    - cri-tools
+    - runc
+    state: latest
+
+
+- name: copy crio conf file
+  copy:
+    src: 02-cgroup-manager.conf
+    dest: /etc/crio/crio.conf.d/02-cgroup-manager.conf
+
+- name: Reload configs
+  systemd: daemon_reload=yes
+
+- name: Start and enable crio
+  systemd:
+    name: crio
+    enabled: yes
+    state: started

@@ -1,0 +1,173 @@
+prepare_os_extra_etc_hosts: 10.4.91.5 testing-vip
+kubernetes_version: "1.20.6"
+ufw_ssh_port: "6465"
+################################
+###    CRI-O customization   ###
+################################
+cri_version: "1.21"
+os_version: xUbuntu_20.04
+################################
+### Keepalived customization ###
+################################
+keepalived_project_name: testing
+keepalived_local_dir: files
+keepalived_version: 2.2.2
+keepalived_haproxy_check_script: false
+keepalived_vip_address: "10.4.91.5"
+keepalived_vrrp_interface: "{{ ansible_default_ipv4.interface }}"
+keepalived_auth_pass: "ORstQd11Jbt0OtpvdMw"
+#############################
+### HAproxy customization ###
+#############################
+haproxy_project_name: "{{keepalived_project_name}}"
+haproxy_local_dir: files
+haproxy_version: '2.2.10'
+haproxy_lua_version: '5.4.2'
+haproxy_nonlocal_bind: false
+haproxy_dhparam_size: '2048'
+haproxy_ssl_default_bind_options: ssl-min-ver TLSv1.2
+haproxy_ssl_default_bind_ciphers:
+- ECDHE-ECDSA-AES128-GCM-SHA256
+- ECDHE-RSA-AES128-GCM-SHA256
+- ECDHE-ECDSA-AES256-GCM-SHA384
+- ECDHE-RSA-AES256-GCM-SHA384
+- ECDHE-ECDSA-CHACHA20-POLY1305
+- ECDHE-RSA-CHACHA20-POLY1305
+- DHE-RSA-AES128-GCM-SHA256
+- DHE-RSA-AES256-GCM-SHA384
+
+haproxy_ssl_default_server_options: ssl-min-ver TLSv1.2
+haproxy_ssl_default_server_ciphers:
+- ECDHE-ECDSA-AES128-GCM-SHA256
+- ECDHE-RSA-AES128-GCM-SHA256
+- ECDHE-ECDSA-AES256-GCM-SHA384
+- ECDHE-RSA-AES256-GCM-SHA384
+- ECDHE-ECDSA-CHACHA20-POLY1305
+- ECDHE-RSA-CHACHA20-POLY1305
+- DHE-RSA-AES128-GCM-SHA256
+- DHE-RSA-AES256-GCM-SHA384
+
+haproxy_backend_default_server: "inter 10s downinter 5s rise 2 fall 2 slowstart 60s maxconn 250 maxqueue 256 weight 100"
+haproxy_metrics_prometheus: false
+haproxy_frontend_name: frontend
+haproxy_frontend_host: "testing-vip"
+haproxy_frontend_port: '443'
+haproxy_backend_name: masters
+haproxy_backend_servers: []
+haproxy_backend_servers_port: '6443'
+#############################
+###   Etcd customization  ###
+#############################
+etcd_ca_conf_directory: "files/{{ kubernetes_project_name }}"
+kubeadm_version: "1.20.6-00"
+etcd_project_dir: files/{{ etcd_project_name }}
+etcd_project_name: "{{keepalived_project_name}}"
+etcd_k8s_version: "1.20.6"
+etcd_server_cert_sans: []
+etcd_initial_cluster_state: new
+etcd_initial_cluster_token: "{{ etcd_project_name }}-etcd"
+etcd_tls_min_version: VersionTLS12
+etcd_tls_cipher_suites:
+- TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+- TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+- TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+- TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+- TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305
+- TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305
+- TLS_RSA_WITH_AES_128_GCM_SHA256
+- TLS_RSA_WITH_AES_256_GCM_SHA384
+
+# etcd version
+etcd_version: "3.4.15"
+# Port where etcd listening for clients
+etcd_client_port: "2379"
+# Port where etcd is listening for it's peer's
+etcd_peer_port: "2380"
+# Interface to bind etcd ports to
+etcd_interface: "eth0"
+# Directroy for etcd configuration
+etcd_conf_dir: "/etc/etcd"
+# Directory to store downloaded etcd archive
+# Should not be deleted to avoid downloading over and over again
+etcd_download_dir: "/opt/etcd"
+# Directroy to store etcd binaries
+etcd_bin_dir: "/usr/local/bin"
+# etcd data directory (etcd database files so to say)
+etcd_data_dir: "/var/lib/etcd"
+
+etcd_settings:
+  "name": "{{ansible_hostname}}"
+  "cert-file": "{{etcd_conf_dir}}/server.crt"
+  "key-file": "{{etcd_conf_dir}}/server.key"
+  "trusted-ca-file": "{{etcd_conf_dir}}/ca.crt"
+  "peer-cert-file": "{{etcd_conf_dir}}/peer.crt"
+  "peer-key-file": "{{etcd_conf_dir}}/peer.key"
+  "peer-trusted-ca-file": "{{etcd_conf_dir}}/ca.crt"
+  "peer-client-cert-auth": "true" # # Enable peer client cert authentication
+  "client-cert-auth": "true" # Enable client cert authentication
+  "advertise-client-urls": "{{'https://' + hostvars[inventory_hostname]['ansible_' + etcd_interface].ipv4.address + ':' + etcd_client_port}}"
+  "initial-advertise-peer-urls": "{{'https://' + hostvars[inventory_hostname]['ansible_' + etcd_interface].ipv4.address + ':' + etcd_peer_port}}"
+  "listen-peer-urls": "{{'https://' + hostvars[inventory_hostname]['ansible_' + etcd_interface].ipv4.address + ':' + etcd_peer_port}}"
+  "listen-client-urls": "{{'https://' + hostvars[inventory_hostname]['ansible_' + etcd_interface].ipv4.address + ':' + etcd_client_port + ',https://127.0.0.1:' + etcd_client_port}}"
+  "initial-cluster-token": "etcd-cluster-0" # Initial cluster token for the etcd cluster during bootstrap.
+  "initial-cluster-state": "new" # Initial cluster state ('new' or 'existing')
+  "data-dir": "{{etcd_data_dir}}" # etcd data directory (etcd database files so to say)
+  "wal-dir": "" # Dedicated wal directory ("" means no seperated WAL directory)
+  "auto-compaction-retention": "0" # Auto compaction retention in hour. 0 means disable auto compaction.
+  "snapshot-count": "100000" # Number of committed transactions to trigger a snapshot to disk
+  "heartbeat-interval": "100" # Time (in milliseconds) of a heartbeat interval
+  "election-timeout": "1000" # Time (in milliseconds) for an election to timeout. See tuning documentation for details
+  "max-snapshots": "5" # Maximum number of snapshot files to retain (0 is unlimited)
+  "max-wals": "5" # Maximum number of wal files to retain (0 is unlimited)
+  "quota-backend-bytes": "0" # Raise alarms when backend size exceeds the given quota (0 defaults to low space quota)
+  "log-package-levels": "" # Specify a particular log level for each etcd package (eg: 'etcdmain=CRITICAL,etcdserver=DEBUG')
+  "logger": "zap" # Specify ‘zap’ for structured logging or ‘capnslog’.
+  "log-outputs": "systemd/journal" # Specify 'stdout' or 'stderr' to skip journald logging even when running under systemd
+  "enable-v2": "true" # enable v2 API to stay compatible with previous etcd 3.3.x (needed for flannel e.g.)
+
+# Certificate authority and certificate files for etcd
+etcd_certificates:
+  - ca.crt               # certificate authority file
+  - ca.key           # certificate authority key file
+  - peer.crt        # peer TLS cert file
+  - peer.key    # peer TLS key file
+  - server.crt      # server TLS cert file
+  - server.key  # server TLS key file
+
+
+kubernetes_apiserver_audit: false
+kubernetes_project_name: "{{keepalived_project_name}}"
+kubernetes_project_dir: files/{{ kubernetes_project_name }}
+kubernetes_esdar_key: "Ckcp7YnRWbfta8toDYkjD3jLB08Crgct6oFlrLMZ82k="        # Ckcp7YnRWbfta8toDYkjD3jLB08Crgct6oFlrLMZ82k=
+kubernetes_apiserver_host: "{{ haproxy_frontend_host }}"
+kubernetes_apiserver_port: "6443"
+kubernetes_external_etcds: "{{ groups.etcdcluster }}"
+kubernetes_tls_min_version: VersionTLS12
+kubernetes_tls_cipher_suites:
+- TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+- TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+- TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+- TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+- TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305
+- TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305
+- TLS_RSA_WITH_AES_128_GCM_SHA256
+- TLS_RSA_WITH_AES_256_GCM_SHA384
+
+kubernetes_admission_plugins:
+- NodeRestriction
+- AlwaysPullImages
+- NamespaceLifecycle
+- LimitRanger
+- ServiceAccount
+- DefaultStorageClass
+- DefaultTolerationSeconds
+- MutatingAdmissionWebhook
+- ValidatingAdmissionWebhook
+- ResourceQuota
+
+
+kubernetes_bootstrap_token: "hgdmh0.uv4pywi07x667tvi"          # 123456.abcdefghijklmnop
+kubernetes_certificate_key: "3220ed2b345d1670578b9607cd30f58b3db6f72d35287b6153837b89a568bcf0"          # 1a2b3c4d5e6f7g8h9i10j11k12l13m14n15o16p17q18r19s20t21u22v23w24xy
+kubernetes_ignore_preflight_errors: []
+# - NumCPU
+kubernetes_local_dir: files

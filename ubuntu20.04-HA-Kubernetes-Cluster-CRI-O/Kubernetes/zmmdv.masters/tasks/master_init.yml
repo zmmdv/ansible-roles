@@ -1,0 +1,34 @@
+---
+- name: copy kubeadm init config
+  template:
+    src: kubeadm-init-config.yml.j2
+    dest: $HOME/kubeadm-init-config.yml
+    mode: 0400
+
+- name: initialize the cluster
+  shell: |
+    /bin/kubeadm init --config=$HOME/kubeadm-init-config.yml \
+    --{% if kubernetes_version is version("1.15", "<=") %}experimental-{% endif %}upload-certs \
+    {% if kubernetes_ignore_preflight_errors -%}
+    --ignore-preflight-errors={% for error in kubernetes_ignore_preflight_errors %}{{ error }}{{ "," if not loop.last }}{% endfor %}
+    {% endif -%}
+     > $HOME/cluster-init_{{ inventory_hostname_short }}.log
+
+- name: delete init config
+  file:
+    path: $HOME/kubeadm-init-config.yml
+    state: absent
+
+- name: copy admin.conf and kubernetes ca cert to localhost
+  fetch:
+    src: /etc/kubernetes/{{ item }}
+    dest: "{{ kubernetes_project_dir }}/master/{{ item }}"
+    flat: yes
+  with_items:
+  - admin.conf
+  - pki/ca.crt
+
+- name: delete cluster init log file from remote
+  file:
+    path: $HOME/cluster-init_{{ inventory_hostname_short }}.log
+    state: absent

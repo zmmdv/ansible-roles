@@ -1,0 +1,25 @@
+---
+# tasks file for worker
+- name: copy worker node join config
+  template:
+    src: kubeadm-join-config.yml.j2
+    dest: $HOME/kubeadm-join-config.yml
+    mode: 0400
+
+- name: join worker node to the cluster
+  shell: |
+    /bin/kubeadm join --config=$HOME/kubeadm-join-config.yml \
+    {% if kubernetes_ignore_preflight_errors -%}
+    --ignore-preflight-errors={% for error in kubernetes_ignore_preflight_errors %}{{ error }}{{ "," if not loop.last }}{% endfor %}
+    {% endif -%}
+     > $HOME/cluster-join_{{ inventory_hostname_short }}.log
+
+- name: delete join config
+  file:
+    path: $HOME/kubeadm-join-config.yml
+    state: absent
+
+- name: delete cluster join log file from remote
+  file:
+    path: $HOME/cluster-join_{{ inventory_hostname_short }}.log
+    state: absent

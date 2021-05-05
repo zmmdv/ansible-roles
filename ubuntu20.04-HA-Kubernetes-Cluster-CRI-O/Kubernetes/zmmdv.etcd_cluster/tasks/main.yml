@@ -1,0 +1,210 @@
+---
+
+- name: install kubeadm
+  apt:
+    name: kubeadm={{ kubeadm_version }}
+    state: present
+
+- name: create etcd-ca and apiserver-etcd-client keypairs
+  command: /bin/kubeadm init phase certs {{ item }}
+  delegate_to: "{{ ansible_play_batch | first }}"
+  run_once: true
+  with_items:
+  - etcd-ca
+  - apiserver-etcd-client
+
+- name: fetch etcd-ca and apiserver-etcd-client keypairs
+  fetch:
+    src: /etc/kubernetes/pki/{{ item }}
+    dest: "{{ etcd_project_dir }}/etcd/pki/{{ item }}"
+    flat: yes
+  delegate_to: "{{ ansible_play_batch | first }}"
+  run_once: true
+  with_items:
+  - etcd/ca.crt
+  - etcd/ca.key
+  - apiserver-etcd-client.crt
+  - apiserver-etcd-client.key
+
+- name: copy kubeadm config
+  template:
+    src: kubeadm-init-config.yml.j2
+    dest: $HOME/kubeadm-config.yml
+
+- name: create etcd and kubelet directories
+  file:
+    path: "{{ item }}"
+    state: directory
+  with_items:
+  - /var/lib/kubelet
+  - /etc/kubernetes/pki/etcd
+  - /etc/systemd/system/kubelet.service.d
+
+- name: copy kubelet config
+  template:
+    src: var_lib_kubelet-config.yml.j2
+    dest: /var/lib/kubelet/config.yaml
+
+- name: configure kubelet for etcd
+  copy:
+    src: etc_systemd_system_kubelet.service.d_20-etcd-service-manager.conf
+    dest: /etc/systemd/system/kubelet.service.d/20-etcd-service-manager.conf
+
+- name: copy etcd-ca and apiserver-etcd-client keypairs
+  copy:
+    src: "{{ etcd_project_dir }}/etcd/pki/{{ item }}"
+    dest: /etc/kubernetes/pki/{{ item }}
+  with_items:
+  - etcd/ca.crt
+  - etcd/ca.key
+  - apiserver-etcd-client.crt
+  - apiserver-etcd-client.key
+
+- name: create etcd-server certs
+  command: /bin/kubeadm init phase certs etcd-server --config=$HOME/kubeadm-config.yml
+
+
+- name: create etcd-peer certs
+  command: /bin/kubeadm init phase certs etcd-peer --config=$HOME/kubeadm-config.yml
+
+- name: create etcd-healthcheck-client certs
+  command: /bin/kubeadm init phase certs etcd-healthcheck-client --config=$HOME/kubeadm-config.yml
+
+
+- name: Allow port range 2379-2380
+  ufw:
+    rule: allow
+    port: 2379:2380
+    proto: tcp
+
+##############################################################
+##############################################################
+##############################################################
+##############################################################
+##############################################################
+##############################################################
+
+- name: Gather instance facts
+  setup:
+
+- name: Create etcd config directory
+  file:
+    path: "{{ etcd_conf_dir }}"
+    state: directory
+  tags:
+    - etcd
+
+- name: Create etcd download directory
+  file:
+    path: "{{ etcd_download_dir }}"
+    state: directory
+  tags:
+    - etcd
+
+- name: Create etcd bin directory
+  file:
+    path: "{{ etcd_bin_dir }}"
+    state: directory
+  tags:
+    - etcd
+
+- name: Create etcd data directory
+  file:
+    path: "{{ etcd_data_dir }}"
+    state: directory
+    mode: 0700
+  tags:
+    - etcd
+
+- name: Copy certificates
+  copy:
+    src: "/etc/kubernetes/pki/etcd/{{ item }}"
+    dest: "{{ etcd_conf_dir }}/{{ item }}"
+    remote_src: yes
+    mode: 0640
+    owner: root
+    group: root
+  with_items:
+    - "{{ etcd_certificates }}"
+  tags:
+    - etcd
+
+- name: Downloading official etcd release
+  get_url:
+    url: "https://github.com/coreos/etcd/releases/download/v{{ etcd_version }}/etcd-v{{ etcd_version }}-linux-amd64.tar.gz"
+    dest: "{{ etcd_download_dir }}/etcd-v{{ etcd_version }}-linux-amd64.tar.gz"
+    mode: 0755
+  tags:
+    - etcd
+    - skip_ansible_lint
+
+- name: Unzip downloaded file
+  unarchive:
+    src: "{{ etcd_download_dir }}/etcd-v{{ etcd_version }}-linux-amd64.tar.gz"
+    dest: "{{ etcd_download_dir }}/"
+    remote_src: yes
+    owner: "root"
+    group: "root"
+    creates: "{{ etcd_download_dir }}/etcd-v{{ etcd_version }}-linux-amd64/etcd"
+  tags:
+    - etcd
+
+- name: Copy etcd binaries to destination directory
+  copy:
+    src: "{{ etcd_download_dir }}/etcd-v{{ etcd_version }}-linux-amd64/{{ item }}"
+    dest: "{{ etcd_bin_dir }}/{{ item }}"
+    mode: 0755
+    owner: root
+    group: root
+    remote_src: yes
+  with_items:
+    - etcd
+    - etcdctl
+  tags:
+    - etcd
+
+- name: Combine etcd_settings and etcd_settings_user (if defined)
+  set_fact:
+    etcd_settings: "{{ etcd_settings | combine(etcd_settings_user|default({})) }}"
+  tags:
+    - etcd
+    - etcd-systemd
+
+- name: Create systemd unit file
+  template:
+    src: etc/systemd/system/etcd.service.j2
+    dest: /etc/systemd/system/etcd.service
+    owner: root
+    group: root
+    mode: 0644
+  notify:
+    - reload systemd
+  tags:
+    - etcd
+    - etcd-systemd
+
+- meta: flush_handlers
+
+- name: Enable and start etcd
+  service:
+    name: etcd
+    enabled: yes
+    state: started
+  tags:
+    - etcd
+
+
+- name: wait for cluster startup
+  pause:
+    prompt: "Waiting until etcd cluster is bootstrapped..."
+    minutes: '1'
+
+- name: chek etcd health
+  command: /usr/local/bin/etcdctl --cert /etc/kubernetes/pki/etcd/peer.crt --key /etc/kubernetes/pki/etcd/peer.key --cacert /etc/kubernetes/pki/etcd/ca.crt --endpoints https://127.0.0.1:2379 endpoint health --cluster
+  register: etcd_health
+  run_once: true
+
+- debug: 
+    var: etcd_health.stdout_lines
+
+#/usr/local/bin/etcdctl --cert /etc/kubernetes/pki/etcd/peer.crt --key /etc/kubernetes/pki/etcd/peer.key --cacert /etc/kubernetes/pki/etcd/ca.crt --endpoints https://127.0.0.1:2379 endpoint health --cluster

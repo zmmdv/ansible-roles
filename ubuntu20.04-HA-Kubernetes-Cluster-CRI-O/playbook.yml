@@ -1,0 +1,69 @@
+---
+- hosts: all
+  become: yes
+  tasks:
+
+  - name: Start prepare_os role
+    include_role:
+      name: zmmdv.prepare_os
+
+- hosts: kubernetescluster
+  become: yes
+  tasks:
+
+  - name: Install cri-o
+    include_role:
+      name: zmmdv.cri_o
+
+  - name: Install kubernetes dependencies
+    include_role:
+      name: zmmdv.kubernetes_resources
+
+- hosts: masternodes
+  become: yes
+  tasks:
+  - name: keepalived
+    include_role:
+      name: zmmdv.keepalived
+
+  - name: haproxy
+    include_role:
+      name: zmmdv.haproxy
+
+  - name: stop keepalived and haproxy everywhere except first controller
+    systemd:
+      daemon_reload: yes
+      name: "{{ item }}"
+      state: stopped
+    with_items:
+    - keepalived
+    - haproxy
+    when: inventory_hostname != ansible_play_batch[0]
+
+- hosts: etcdcluster
+  become: yes
+  tasks:
+  - name: etcd
+    include_role:
+      name: zmmdv.etcd_cluster
+
+- hosts: masternodes
+  become: yes
+  tasks:
+  - name: masters
+    include_role:
+      name: zmmdv.masters
+
+- hosts: kubernetescluster
+  become: yes
+  tasks:
+  - name: network plugin
+    include_role:
+      name: zmmdv.network_plugin
+      
+- hosts: workernodes
+  become: yes
+  tasks:
+  - name: workers
+    include_role:
+      name: zmmdv.workers

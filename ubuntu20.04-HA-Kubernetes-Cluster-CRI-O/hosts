@@ -1,0 +1,42 @@
+[all]
+ztelco-testing-k8s-haproxy01 ansible_host=10.4.91.2
+ztelco-testing-k8s-haproxy02 ansible_host=10.4.91.3
+
+ztelco-testing-k8s-master01 ansible_host=10.4.91.11
+ztelco-testing-k8s-master02 ansible_host=10.4.91.12
+ztelco-testing-k8s-master03 ansible_host=10.4.91.13
+
+ztelco-testing-k8s-worker01 ansible_host=10.4.91.41
+ztelco-testing-k8s-worker02 ansible_host=10.4.91.42
+ztelco-testing-k8s-worker03 ansible_host=10.4.91.43
+
+ztelco-testing-k8s-etcd01 ansible_host=10.4.91.51
+ztelco-testing-k8s-etcd02 ansible_host=10.4.91.52
+ztelco-testing-k8s-etcd03 ansible_host=10.4.91.53
+
+[kubernetescluster:children]
+masternodes
+workernodes
+
+[keepalived:children]
+masternodes
+
+[haproxy:children]
+masternodes
+
+[masternodes]
+ztelco-testing-k8s-master01
+ztelco-testing-k8s-master02
+ztelco-testing-k8s-master03
+
+# etcd cluster nodes
+[etcdcluster]
+ztelco-testing-k8s-etcd01
+ztelco-testing-k8s-etcd02
+ztelco-testing-k8s-etcd03
+
+# kubernetes cluster worker nodes
+[workernodes]
+ztelco-testing-k8s-worker01
+ztelco-testing-k8s-worker02
+ztelco-testing-k8s-worker03

@@ -1,0 +1,104 @@
+---
+# tasks file for keepalived
+
+- name: create keepalived downloads directory
+  file:
+    path: "{{ keepalived_local_dir }}/keepalived/downloads/"
+    state: directory
+  delegate_to: localhost
+  connection: local
+  run_once: true
+  become: no
+
+- name: download keepalived source tarball
+  get_url:
+    url: https://www.keepalived.org/software/keepalived-{{ keepalived_version }}.tar.gz
+    dest: "{{ keepalived_local_dir }}/keepalived/downloads/"
+  delegate_to: localhost
+  connection: local
+  run_once: true
+  become: no
+
+- name: unpack keepalived source tarball
+  unarchive:
+    src: "{{ keepalived_local_dir }}/keepalived/downloads/keepalived-{{ keepalived_version }}.tar.gz"
+    dest: $HOME
+
+- name: install keepalived build dependencies
+  apt:
+    name:
+    - gcc
+    - build-essential 
+    - pkg-config
+    - automake 
+    - autoconf
+    - libxtables-dev
+    - libip4tc-dev 
+    - libip6tc-dev
+    - libipset-dev
+    - libnl-3-dev
+    - libnl-genl-3-dev 
+    - libssl-dev
+    - libsystemd-dev
+    - libmagic-dev
+    - libsnmp-dev
+    - libglib2.0-dev
+    - libpcre2-dev
+    - libnftnl-dev 
+    - libmnl-dev
+    state: present
+
+- name: configure and build keepalived from source
+  shell: |
+    ./configure --prefix=/usr/ --sysconfdir=/etc/ \
+    && /bin/make \
+    && /bin/make install
+  args:
+    chdir: $HOME/keepalived-{{ keepalived_version }}
+
+- name: copy keepalived config
+  template:
+    src: etc_keepalived_keepalived.conf.j2
+    dest: /etc/keepalived/keepalived.conf
+    mode: 0644
+
+- name: start keepalived
+  systemd:
+    daemon_reload: yes
+    name: keepalived
+    enabled: yes
+    state: started
+
+- name: delete unneded keepalived files from remote
+  file:
+    path: $HOME/keepalived-{{ keepalived_version }}
+    state: absent
+
+- name: wait for keepalived dependencies stop
+  pause:
+    prompt: "Waiting until dpkg stops"
+    minutes: "1"
+
+- name: Uninstall keepalived build dependencies
+  apt:
+    name:
+    - gcc
+    - build-essential 
+    - pkg-config
+    - automake 
+    - autoconf
+    - libxtables-dev
+    - libip4tc-dev 
+    - libip6tc-dev
+    - libipset-dev
+    - libnl-3-dev
+    - libnl-genl-3-dev 
+    - libssl-dev
+    - libsystemd-dev
+    - libmagic-dev
+    - libsnmp-dev
+    - libglib2.0-dev
+    - libpcre2-dev
+    - libnftnl-dev 
+    - libmnl-dev
+    state: absent

@@ -1,0 +1,8 @@
+- name: Install kubelet
+  apt:
+    name: kubelet={{ kubernetes_version }}-00
+    state: present
+
+- name: Install kubeadm
+  apt:
+    name: kubeadm={{ kubernetes_version }}-00

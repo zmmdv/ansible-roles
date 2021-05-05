@@ -1,0 +1,86 @@
+apiVersion: kubeadm.k8s.io/v1beta2
+kind: InitConfiguration
+bootstrapTokens:
+- groups:
+  - system:bootstrappers:kubeadm:default-node-token
+  token: {{ kubernetes_bootstrap_token }}
+  ttl: 24h0m0s
+  usages:
+  - signing
+  - authentication
+certificateKey: {{ kubernetes_certificate_key }}
+
+
+---
+
+apiVersion: kubeadm.k8s.io/v1beta2
+kind: ClusterConfiguration
+kubernetesVersion: {{ kubernetes_version }}
+controlPlaneEndpoint: "{{keepalived_vip_address}}:{{haproxy_frontend_port}}"
+etcd:
+  external:
+    endpoints:
+    {% for server in kubernetes_external_etcds -%}
+    - https://{{ server }}:2379
+    {% endfor -%}
+    caFile: /etc/kubernetes/pki/etcd/ca.crt
+    certFile: /etc/kubernetes/pki/apiserver-etcd-client.crt
+    keyFile: /etc/kubernetes/pki/apiserver-etcd-client.key
+apiServer:
+  extraVolumes:
+  {% if kubernetes_apiserver_audit -%}
+  - name: audit-policy
+    hostPath: /etc/kubernetes/audit-policy
+    mountPath: /etc/kubernetes/audit-policy
+    readOnly: true
+  - name: audit-logs
+    hostPath: /var/log/audit/kubernetes
+    mountPath: /var/log/audit/kubernetes
+    readOnly: false
+  {% endif -%}
+  {% if kubernetes_esdar_key -%}
+  - name: esdar
+    hostPath: /etc/kubernetes/esdar
+    mountPath: /etc/kubernetes/esdar
+    readOnly: true
+  {% endif -%}
+  extraArgs:
+    {% if kubernetes_apiserver_audit -%}
+    audit-log-path: /var/log/audit/kubernetes/kube-apiserver-audit.log
+    audit-log-maxage: "30"
+    audit-log-maxbackup: "7"
+    audit-log-maxsize: "100"
+    audit-policy-file: /etc/kubernetes/audit-policy/apiserver-audit-policy.yml
+    {% endif -%}
+    {% if kubernetes_esdar_key -%}
+    encryption-provider-config: /etc/kubernetes/esdar/secrets_encryption.yml
+    {% endif -%}
+    profiling: "False"
+    authorization-mode: Node,RBAC
+    service-account-lookup: "True"
+    default-not-ready-toleration-seconds: "90"
+    default-unreachable-toleration-seconds: "90"
+    feature-gates: RotateKubeletClientCertificate=true
+    enable-admission-plugins: {% for ap in kubernetes_admission_plugins %}{{ ap }}{{ "," if not loop.last }}{% endfor %}
+
+    tls-min-version: {{ kubernetes_tls_min_version }}
+    tls-cipher-suites: {% for tcs in kubernetes_tls_cipher_suites %}{{ tcs }}{{ "," if not loop.last }}{% endfor %}
+
+networking:
+  podSubnet: "10.244.0.0/16"
+
+controllerManager:
+  extraArgs:
+    profiling: "False"
+    node-monitor-period: 5s
+    node-monitor-grace-period: 40s
+    terminated-pod-gc-threshold: "1250"
+    feature-gates: RotateKubeletServerCertificate=true
+    tls-min-version: {{ kubernetes_tls_min_version }}
+    tls-cipher-suites: {% for tcs in kubernetes_tls_cipher_suites %}{{ tcs }}{{ "," if not loop.last }}{% endfor %}
+
+scheduler:
+  extraArgs:
+    profiling: "False"
+    tls-min-version: {{ kubernetes_tls_min_version }}
+    tls-cipher-suites: {% for tcs in kubernetes_tls_cipher_suites %}{{ tcs }}{{ "," if not loop.last }}{% endfor %}
